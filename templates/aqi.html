@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Air Quality Index</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.8.1/vanilla-tilt.min.js"></script>
+    <style>
+        :root { --accent: #7c3aed; --accent-light: #a78bfa; --surface: rgba(20,20,30,0.6); --border: rgba(255,255,255,0.07); --muted: #94a3b8; --radius: 20px; }
+        * { font-family: 'Outfit', sans-serif; box-sizing: border-box; margin: 0; padding: 0; }
+
+        /* ── SYSTEM UI ── */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+        @keyframes bgAnim { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+        @keyframes floatIn { from{opacity:0;transform:translateY(25px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes spin { to{transform:rotate(360deg)} }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+        body {
+            background: linear-gradient(-45deg, #0f172a, #0d1b2a, #0a0f1e, #0a0a0f);
+            background-size: 400% 400%;
+            animation: bgAnim 18s ease infinite;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 30px 16px 80px;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            top: 10%; left: 50%;
+            transform: translateX(-50%);
+            width: 700px; height: 700px;
+            background: radial-gradient(circle, rgba(6,182,212,0.08) 0%, transparent 70%);
+            pointer-events: none; z-index: 0;
+            animation: pulse 10s infinite;
+        }
+
+        .container { width: 100%; max-width: 1000px; z-index: 1; position: relative; animation: floatIn .9s ease forwards; }
+
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; flex-wrap: wrap; gap: 16px; }
+        h1 { font-size: 30px; font-weight: 800; background: linear-gradient(90deg, #e2e8f0, #67e8f9); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        .location-badge { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); padding: 5px 12px; border-radius: 20px; font-size: 13px; color: var(--muted); }
+        .location-badge strong { color: #fff; }
+
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px; margin-bottom: 20px; backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); transition: border-color .3s, box-shadow .3s; animation: floatIn .7s ease forwards; }
+        .card:hover { border-color: rgba(103,232,249,0.2); box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+        .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+        .card-header h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); }
+        .card-header::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(255,255,255,.1), transparent); }
+
+        /* ── AQI GAUGE ── */
+        .aqi-hero { display: grid; grid-template-columns: 220px 1fr; gap: 28px; align-items: center; }
+        .gauge-wrap { position: relative; width: 200px; height: 200px; margin: 0 auto; }
+        .gauge-canvas { width: 100%; height: 100%; }
+        .gauge-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
+        .gauge-value { font-size: 52px; font-weight: 800; line-height: 1; }
+        .gauge-category { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+        .aqi-info { display: flex; flex-direction: column; gap: 14px; }
+        .aqi-level-bar { height: 10px; border-radius: 10px; background: linear-gradient(90deg, #4ade80 0%, #fbbf24 30%, #fb923c 55%, #f87171 75%, #c084fc 90%, #9f1239 100%); position: relative; margin: 8px 0 16px; }
+        .aqi-level-marker { position: absolute; top: -6px; width: 4px; height: 22px; background: #fff; border-radius: 3px; transition: left 1s ease; box-shadow: 0 0 8px rgba(255,255,255,.5); }
+        .aqi-advice { padding: 16px; border-radius: 14px; font-size: 14px; line-height: 1.6; }
+
+        /* ── POLLUTANT GRID ── */
+        .pollutant-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
+        .pollutant-card { background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 14px; padding: 18px; transition: all .3s; }
+        .pollutant-card:hover { background: rgba(255,255,255,.08); transform: translateY(-3px); }
+        .pol-name { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+        .pol-value { font-size: 28px; font-weight: 700; margin: 8px 0 4px; }
+        .pol-unit { font-size: 11px; color: var(--muted); }
+        .pol-bar-track { height: 5px; background: rgba(255,255,255,.08); border-radius: 5px; margin-top: 12px; overflow: hidden; }
+        .pol-bar-fill { height: 100%; border-radius: 5px; transition: width 1.2s ease; }
+
+        /* ── 24H TREND ── */
+        .chart-container { width: 100%; height: 250px; }
+
+        /* ── HEALTH TIPS ── */
+        .tips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+        .tip-card { background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+        .tip-icon { font-size: 26px; margin-bottom: 10px; }
+        .tip-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+        .tip-text { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+        .btn-back { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 17px; border-radius: 16px; background: rgba(255,255,255,.05); color: #fff; font-size: 15px; font-weight: 600; border: 1px solid var(--border); cursor: pointer; transition: all .3s ease; margin-top: 6px; }
+        .btn-back:hover { background: rgba(255,255,255,.09); transform: translateY(-2px); }
+
+        #scrollTop { position: fixed; bottom: 28px; right: 28px; width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, #0891b2, #06b6d4); border: none; color: #fff; font-size: 20px; cursor: pointer; box-shadow: 0 6px 20px rgba(6,182,212,.5); display: none; align-items: center; justify-content: center; transition: all .3s; z-index: 999; }
+        #scrollTop.visible { display: flex; animation: fadeIn .3s ease; }
+        #scrollTop:hover { transform: translateY(-3px) scale(1.1); }
+
+        @media(max-width:640px) { .aqi-hero { grid-template-columns: 1fr; text-align: center; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="page-header">
+        <div>
+            <h1>🌬️ Air Quality Index</h1>
+            {% if city_name and city_name != '' %}
+            <div class="location-badge"><span>📍</span><strong>{{ city_name }}</strong></div>
+            {% endif %}
+        </div>
+        <button class="btn-back" style="width:auto; padding: 10px 20px;" onclick="window.history.back()">← Back</button>
+    </div>
+
+    {% if lat and lon and lat != '' and lon != '' %}
+
+    <div class="card" id="aqiHeroCard" style="display:none;">
+        <div class="card-header"><span>🎯</span><h3>Current AQI Overview</h3></div>
+        <div class="aqi-hero">
+            <div>
+                <div class="gauge-wrap">
+                    <canvas class="gauge-canvas" id="aqiGauge"></canvas>
+                    <div class="gauge-label">
+                        <div class="gauge-value" id="aqiValue">—</div>
+                        <div class="gauge-category" id="aqiCat">Loading…</div>
+                    </div>
+                </div>
+            </div>
+            <div class="aqi-info">
+                <div>
+                    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;">
+                        <span>Good</span><span>Moderate</span><span>Unhealthy</span><span>Hazardous</span>
+                    </div>
+                    <div class="aqi-level-bar"><div class="aqi-level-marker" id="aqiMarker" style="left:0%"></div></div>
+                </div>
+                <div class="aqi-advice" id="aqiAdvice"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" id="pollutantsCard" style="display:none;">
+        <div class="card-header"><span>🧪</span><h3>Pollutant Levels</h3></div>
+        <div class="pollutant-grid" id="pollutantGrid"></div>
+    </div>
+
+    <div class="card" id="trendCard" style="display:none;">
+        <div class="card-header"><span>📈</span><h3>24-Hour AQI Trend</h3></div>
+        <div class="chart-container"><canvas id="aqiChart"></canvas></div>
+    </div>
+
+    <div class="card" id="tipsCard" style="display:none;">
+        <div class="card-header"><span>💡</span><h3>Health Recommendations</h3></div>
+        <div class="tips-grid" id="tipsGrid"></div>
+    </div>
+
+    {% else %}
+    <div class="card" style="text-align:center;padding:40px;">
+        <span style="font-size:48px;">📍</span>
+        <p style="margin-top:16px;color:#fbbf24;font-weight:600;">Location not available.</p>
+    </div>
+    {% endif %}
+
+    <button onclick="window.history.back()" class="btn-back">← Back to Results</button>
+</div>
+<button id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+const LAT = '{{ lat }}';
+const LON = '{{ lon }}';
+
+function aqiCategory(aqi) {
+    if (aqi <= 50)  return { cat: 'Good',            color: '#4ade80', bg: 'rgba(74,222,128,0.12)',  border: 'rgba(74,222,128,0.3)' };
+    if (aqi <= 100) return { cat: 'Satisfactory',    color: '#a3e635', bg: 'rgba(163,230,53,0.12)',  border: 'rgba(163,230,53,0.3)' };
+    if (aqi <= 200) return { cat: 'Moderate',        color: '#fbbf24', bg: 'rgba(251,191,36,0.12)',  border: 'rgba(251,191,36,0.3)' };
+    if (aqi <= 300) return { cat: 'Poor',            color: '#f97316', bg: 'rgba(249,115,22,0.12)',  border: 'rgba(249,115,22,0.3)' };
+    if (aqi <= 400) return { cat: 'Very Poor',       color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.3)' };
+    return                 { cat: 'Severe',          color: '#7f1d1d', bg: 'rgba(127,29,29,0.12)',   border: 'rgba(127,29,29,0.3)' };
+}
+
+const tips = {
+    Good:       [{ icon:'🏃', t:'Exercise Outdoors', d:'Air quality is perfect for workouts and outdoor activities.' }, { icon:'🪟', t:'Open Windows', d:'Fresh air circulation is safe and beneficial.' }, { icon:'🌿', t:'Enjoy Nature', d:'Ideal conditions for parks and outdoor leisure.' }],
+    Satisfactory:[{ icon:'😷', t:'Sensitive Groups', d:'Minor breathing discomfort to sensitive people.' }, { icon:'🏠', t:'Check Indoors', d:'Keep homes clean from dust.' }, { icon:'💧', t:'Stay Hydrated', d:'Drink plenty of water throughout the day.' }],
+    Moderate:   [{ icon:'😷', t:'Breathing Discomfort', d:'People with lung/heart disease should reduce exertion.' }, { icon:'🏠', t:'Stay Indoors', d:'Sensitive groups should minimize outdoor exposure.' }, { icon:'💊', t:'Medication', d:'Asthma sufferers should keep inhalers handy.' }],
+    Poor:       [{ icon:'🚫', t:'Avoid Outdoors', d:'Breathing discomfort to most people on prolonged exposure.' }, { icon:'😷', t:'Wear Mask', d:'Wear a mask like N95 if going outside.' }, { icon:'🏥', t:'Health Alert', d:'Seek medical advice if experiencing respiratory issues.' }],
+    'Very Poor': [{ icon:'🚨', t:'Health Emergency', d:'Respiratory illness on prolonged exposure.' }, { icon:'🔒', t:'Seal Home', d:'Use air purifiers and keep doors/windows closed.' }, { icon:'📞', t:'Check Vulnerable', d:'Monitor elderly and children.' }],
+    Severe:  [{ icon:'☣️', t:'Hazardous', d:'Healthy people will be affected. Seriously impacts those with diseases.' }, { icon:'🏥', t:'Seek Shelter', d:'Go to a clean indoor location immediately.' }, { icon:'📢', t:'Emergency', d:'Follow local health authority protocols.' }],
+};
+
+function getSubIndex(val, breakpoints) {
+    if (!val || val < 0) return 0;
+    for (let i = 0; i < breakpoints.length - 1; i++) {
+        let bLow = breakpoints[i];
+        let bHigh = breakpoints[i+1];
+        if (val >= bLow.c && val <= bHigh.c) {
+            return Math.round(((bHigh.i - bLow.i) / (bHigh.c - bLow.c)) * (val - bLow.c) + bLow.i);
+        }
+    }
+    let last = breakpoints[breakpoints.length - 1];
+    return Math.round(last.i + (val - last.c));
+}
+const bpPM25 = [{c:0, i:0}, {c:30, i:50}, {c:60, i:100}, {c:90, i:200}, {c:120, i:300}, {c:250, i:400}, {c:1000, i:500}];
+const bpPM10 = [{c:0, i:0}, {c:50, i:50}, {c:100, i:100}, {c:250, i:200}, {c:350, i:300}, {c:430, i:400}, {c:2000, i:500}];
+const bpNO2 = [{c:0, i:0}, {c:40, i:50}, {c:80, i:100}, {c:180, i:200}, {c:280, i:300}, {c:400, i:400}, {c:1000, i:500}];
+const bpSO2 = [{c:0, i:0}, {c:40, i:50}, {c:80, i:100}, {c:380, i:200}, {c:800, i:300}, {c:1600, i:400}, {c:3000, i:500}];
+const bpO3 = [{c:0, i:0}, {c:50, i:50}, {c:100, i:100}, {c:168, i:200}, {c:208, i:300}, {c:748, i:400}, {c:1000, i:500}];
+const bpCO = [{c:0, i:0}, {c:1, i:50}, {c:2, i:100}, {c:10, i:200}, {c:17, i:300}, {c:34, i:400}, {c:100, i:500}];
+
+function calcIndianAQI(h, idx) {
+    let pm25 = h.pm2_5 ? (h.pm2_5[idx] || 0) : 0;
+    let pm10 = h.pm10 ? (h.pm10[idx] || 0) : 0;
+    let no2 = h.nitrogen_dioxide ? (h.nitrogen_dioxide[idx] || 0) : 0;
+    let so2 = h.sulphur_dioxide ? (h.sulphur_dioxide[idx] || 0) : 0;
+    let o3 = h.ozone ? (h.ozone[idx] || 0) : 0;
+    let co = h.carbon_monoxide ? ((h.carbon_monoxide[idx] || 0) / 1000) : 0;
+    return Math.max(0, getSubIndex(pm25, bpPM25), getSubIndex(pm10, bpPM10), getSubIndex(no2, bpNO2), getSubIndex(so2, bpSO2), getSubIndex(o3, bpO3), getSubIndex(co, bpCO));
+}
+
+let aqiChart = null;
+
+if (LAT && LON && LAT !== 'None') {
+    const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${LAT}&longitude=${LON}&hourly=pm2_5,pm10,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone&timezone=auto`;
+
+    fetch(url).then(r => r.json()).then(data => {
+        const h = data.hourly;
+        const now = new Date().getHours();
+        
+        // Calculate Indian AQI
+        const aqi = Math.round(calcIndianAQI(h, now));
+        const { cat, color, bg, border } = aqiCategory(aqi);
+
+        // Gauge
+        document.getElementById('aqiValue').textContent = aqi;
+        document.getElementById('aqiValue').style.color = color;
+        document.getElementById('aqiCat').textContent = 'CPCB NAQI: ' + cat;
+        const pct = Math.min(aqi / 500 * 100, 100);
+        document.getElementById('aqiMarker').style.left = pct + '%';
+
+        // Gauge chart (doughnut)
+        const gCtx = document.getElementById('aqiGauge').getContext('2d');
+        new Chart(gCtx, {
+            type: 'doughnut',
+            data: { datasets: [{ data: [aqi, Math.max(0, 500 - aqi)], backgroundColor: [color, 'rgba(255,255,255,0.06)'], borderWidth: 0, borderRadius: 6 }] },
+            options: { cutout: '78%', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } } }
+        });
+
+        // Advice
+        const advEl = document.getElementById('aqiAdvice');
+        advEl.style.background = bg;
+        advEl.style.border = `1px solid ${border}`;
+        advEl.style.color = color;
+        const advMap = {
+            Good: '✅ Air quality is excellent. No precautions needed. Perfect for outdoor activities!',
+            Satisfactory: '⚠️ Air quality is satisfactory. Minor breathing discomfort to sensitive people.',
+            Moderate: '🟠 Breathing discomfort to people with lung, heart disease, children and older adults.',
+            Poor: '🔴 Breathing discomfort to most people on prolonged exposure.',
+            'Very Poor': '🟣 Respiratory illness on prolonged exposure. Effects may be more pronounced in people with lung and heart diseases.',
+            Severe: '☣️ Respiratory impact even on healthy people, and serious health impacts on people with lung/heart diseases.',
+        };
+        advEl.textContent = advMap[cat] || '';
+        document.getElementById('aqiHeroCard').style.display = 'block';
+
+        // Pollutants
+        const polls = [
+            { name: 'PM2.5', val: h.pm2_5[now], unit: 'µg/m³', max: 250, color: '#f87171' },
+            { name: 'PM10',  val: h.pm10[now],  unit: 'µg/m³', max: 430, color: '#fb923c' },
+            { name: 'CO',    val: Math.round(h.carbon_monoxide[now]/100)/10, unit: 'mg/m³', max: 34, color: '#fbbf24' },
+            { name: 'NO₂',  val: h.nitrogen_dioxide[now], unit: 'µg/m³', max: 400, color: '#a3e635' },
+            { name: 'SO₂',  val: h.sulphur_dioxide[now],  unit: 'µg/m³', max: 1600, color: '#38bdf8' },
+            { name: 'Ozone', val: h.ozone[now],           unit: 'µg/m³', max: 748, color: '#818cf8' },
+        ];
+        const grid = document.getElementById('pollutantGrid');
+        polls.forEach(p => {
+            const val = p.val ? p.val.toFixed(1) : '—';
+            const pct = p.val ? Math.min(p.val / p.max * 100, 100) : 0;
+            grid.insertAdjacentHTML('beforeend', `
+                <div class="pollutant-card">
+                    <div class="pol-name">${p.name}</div>
+                    <div class="pol-value" style="color:${p.color};">${val}</div>
+                    <div class="pol-unit">${p.unit}</div>
+                    <div class="pol-bar-track"><div class="pol-bar-fill" style="width:${pct}%;background:${p.color};"></div></div>
+                </div>
+            `);
+        });
+        document.getElementById('pollutantsCard').style.display = 'block';
+
+        // 24h Trend (using calculated NAQI)
+        const labels = h.time.slice(now - 12, now + 12).map(t => new Date(t).toLocaleTimeString([], {hour:'numeric',hour12:true}));
+        const vals = [];
+        for (let offset = -12; offset < 12; offset++) {
+            let t_now = now + offset;
+            if (t_now >= 0 && t_now < h.time.length) vals.push(Math.round(calcIndianAQI(h, t_now)));
+            else vals.push(null);
+        }
+
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Outfit', sans-serif";
+        aqiChart = new Chart(document.getElementById('aqiChart'), {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'AQI (India CPCB)', data: vals,
+                    borderColor: '#06b6d4', borderWidth: 2.5, tension: 0.4, fill: true,
+                    backgroundColor: 'rgba(6,182,212,0.15)',
+                    pointBackgroundColor: '#06b6d4', pointBorderColor: '#fff', pointHoverRadius: 8
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(10,10,20,.9)', cornerRadius: 10, padding: 10 } },
+                scales: { y: { grid: { color: 'rgba(255,255,255,.04)' }, beginAtZero: true }, x: { grid: { display: false } } }
+            }
+        });
+        document.getElementById('trendCard').style.display = 'block';
+
+        // Tips
+        const tipsData = tips[cat] || tips['Good'];
+        const tipsGrid = document.getElementById('tipsGrid');
+        tipsData.forEach(tip => {
+            tipsGrid.insertAdjacentHTML('beforeend', `
+                <div class="tip-card">
+                    <div class="tip-icon">${tip.icon}</div>
+                    <div class="tip-title">${tip.t}</div>
+                    <div class="tip-text">${tip.d}</div>
+                </div>
+            `);
+        });
+        document.getElementById('tipsCard').style.display = 'block';
+
+        // Initialize 3D Tilt after cards become visible
+        setTimeout(() => {
+            VanillaTilt.init(document.querySelectorAll(".card"), {
+                max: 5,
+                speed: 400,
+                glare: true,
+                "max-glare": 0.08
+            });
+        }, 100);
+
+    }).catch(e => console.error('AQI error:', e));
+}
+
+window.addEventListener('scroll', () => {
+    const btn = document.getElementById('scrollTop');
+    btn.classList.toggle('visible', window.scrollY > 300);
+});
+</script>
+</body>
+</html>
