@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Insights</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --accent: #7c3aed; --accent-light: #a78bfa; --surface: rgba(20,20,30,0.6); --border: rgba(255,255,255,0.07); --muted: #94a3b8; --radius: 20px; }
+        * { font-family: 'Outfit', sans-serif; box-sizing: border-box; margin: 0; padding: 0; }
+        @keyframes bgAnim { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+        @keyframes floatIn { from{opacity:0;transform:translateY(25px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        @keyframes shine { from{background-position:-200% center} to{background-position:200% center} }
+
+        body {
+            background: linear-gradient(-45deg, #0f172a, #1e1033, #0a0f1e, #0a0a0f);
+            background-size: 400% 400%;
+            animation: bgAnim 18s ease infinite;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 30px 16px 80px;
+        }
+        body::before {
+            content:"";
+            position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
+            width: 700px; height: 700px;
+            background: radial-gradient(circle, rgba(168,85,247,0.08) 0%, transparent 70%);
+            pointer-events: none; z-index: 0; animation: pulse 10s infinite;
+        }
+
+        .container { width: 100%; max-width: 1000px; z-index: 1; position: relative; animation: floatIn .9s ease forwards; }
+
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; flex-wrap: wrap; gap: 16px; }
+        h1 { font-size: 30px; font-weight: 800; background: linear-gradient(90deg, #e2e8f0, #d946ef); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        .location-badge { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; background: rgba(255,255,255,.05); border: 1px solid var(--border); padding: 5px 12px; border-radius: 20px; font-size: 13px; color: var(--muted); }
+        .location-badge strong { color: #fff; }
+
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px; margin-bottom: 20px; backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); transition: border-color .3s, box-shadow .3s; animation: floatIn .7s ease forwards; }
+        .card:hover { border-color: rgba(168,85,247,.2); box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+        .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+        .card-header h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); }
+        .card-header::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg,rgba(255,255,255,.1),transparent); }
+
+        /* ── BEST DAY ── */
+        .best-day-highlight {
+            background: linear-gradient(135deg, rgba(124,58,237,.2), rgba(168,85,247,.1));
+            border: 1px solid rgba(167,139,250,.3);
+            border-radius: 18px;
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .best-day-badge { font-size: 56px; flex-shrink: 0; }
+        .best-day-info h2 { font-size: 22px; font-weight: 800; background: linear-gradient(90deg, #fff, var(--accent-light)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        .best-day-info p { color: var(--muted); font-size: 14px; margin-top: 6px; line-height: 1.6; }
+        .best-day-tag { display: inline-flex; align-items: center; gap: 6px; background: rgba(124,58,237,.3); border: 1px solid rgba(167,139,250,.4); border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: var(--accent-light); margin-top: 10px; }
+
+        .days-score-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+        .day-score-item { background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 14px; padding: 14px 10px; text-align: center; transition: all .3s; cursor: default; }
+        .day-score-item:hover { background: rgba(255,255,255,.07); transform: translateY(-3px); }
+        .day-score-item.best { border-color: rgba(167,139,250,.5); background: rgba(124,58,237,.12); }
+        .day-score-name { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+        .day-score-icon { font-size: 28px; margin: 8px 0; }
+        .day-score-bar-track { height: 6px; background: rgba(255,255,255,.08); border-radius: 6px; margin-top: 8px; overflow: hidden; }
+        .day-score-bar-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--accent), #a855f7); transition: width 1s ease; }
+        .day-score-val { font-size: 12px; font-weight: 700; color: var(--accent-light); margin-top: 5px; }
+
+        /* ── MOON PHASE ── */
+        .moon-card-inner { display: flex; align-items: center; gap: 28px; }
+        .moon-emoji { font-size: 90px; line-height: 1; filter: drop-shadow(0 0 20px rgba(255,255,255,.2)); }
+        .moon-info h2 { font-size: 26px; font-weight: 800; color: #e2e8f0; }
+        .moon-info p  { color: var(--muted); font-size: 14px; margin-top: 8px; line-height: 1.6; }
+        .moon-stats { display: flex; gap: 14px; margin-top: 16px; flex-wrap: wrap; }
+        .moon-stat { background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 12px; padding: 10px 16px; font-size: 13px; }
+        .moon-stat span { color: var(--muted); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .8px; }
+
+        /* ── CLOTHING ── */
+        .outfit-display { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+        .outfit-icon { font-size: 80px; filter: drop-shadow(0 4px 10px rgba(0,0,0,.4)); }
+        .outfit-info h2 { font-size: 22px; font-weight: 700; color: #e2e8f0; }
+        .outfit-info p { color: var(--muted); font-size: 14px; margin-top: 8px; line-height: 1.6; }
+        .outfit-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+        .outfit-tag { background: rgba(255,255,255,.06); border: 1px solid var(--border); border-radius: 20px; padding: 5px 14px; font-size: 13px; font-weight: 500; }
+
+        /* ── PRESSURE TREND ── */
+        .pressure-hero { display: flex; align-items: center; gap: 24px; margin-bottom: 20px; }
+        .pressure-value { font-size: 52px; font-weight: 800; color: #fff; }
+        .pressure-value small { font-size: 18px; color: var(--muted); }
+        .pressure-trend-badge { padding: 8px 16px; border-radius: 14px; font-size: 14px; font-weight: 600; }
+        .trend-rising   { background: rgba(74,222,128,.12); color: #4ade80; border: 1px solid rgba(74,222,128,.3); }
+        .trend-falling  { background: rgba(248,113,113,.12); color: #f87171; border: 1px solid rgba(248,113,113,.3); }
+        .trend-stable   { background: rgba(251,191,36,.12);  color: #fbbf24; border: 1px solid rgba(251,191,36,.3); }
+        .chart-container { width: 100%; height: 240px; }
+
+        /* ── RAIN CHART ── */
+        .rain-chart-container { width: 100%; height: 220px; }
+
+        /* ── WEEKLY SUMMARY ── */
+        .summary-text { background: rgba(255,255,255,.03); border-left: 3px solid var(--accent-light); border-radius: 0 14px 14px 0; padding: 18px 20px; font-size: 15px; line-height: 1.8; color: #e2e8f0; }
+        .summary-text strong { color: var(--accent-light); }
+
+        .btn-back { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 17px; border-radius: 16px; background: rgba(255,255,255,.05); color: #fff; font-size: 15px; font-weight: 600; border: 1px solid var(--border); cursor: pointer; transition: all .3s ease; margin-top: 6px; }
+        .btn-back:hover { background: rgba(255,255,255,.09); transform: translateY(-2px); }
+
+        #scrollTop { position: fixed; bottom: 28px; right: 28px; width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #a855f7); border: none; color: #fff; font-size: 20px; cursor: pointer; box-shadow: 0 6px 20px rgba(124,58,237,.5); display: none; align-items: center; justify-content: center; transition: all .3s; z-index: 999; }
+        #scrollTop.visible { display: flex; animation: fadeIn .3s ease; }
+        #scrollTop:hover { transform: translateY(-3px) scale(1.1); }
+
+        @media(max-width:640px) { .days-score-grid{grid-template-columns:repeat(4,1fr)} .moon-card-inner{flex-direction:column;text-align:center} }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="page-header">
+        <div>
+            <h1>✨ Weather Insights</h1>
+            {% if city_name and city_name != '' %}
+            <div class="location-badge"><span>📍</span><strong>{{ city_name }}</strong></div>
+            {% endif %}
+        </div>
+        <button class="btn-back" style="width:auto;padding:10px 20px;" onclick="window.history.back()">← Back</button>
+    </div>
+
+    {% if lat and lon and lat != '' and lon != '' %}
+
+    <!-- WEEKLY SUMMARY -->
+    <div class="card" id="summaryCard" style="display:none;">
+        <div class="card-header"><span>📋</span><h3>Weekly Summary</h3></div>
+        <div class="summary-text" id="summaryText"></div>
+    </div>
+
+    <!-- BEST DAY PICKER -->
+    <div class="card" id="bestDayCard" style="display:none;">
+        <div class="card-header"><span>🏆</span><h3>Best Day This Week for Outdoors</h3></div>
+        <div id="bestDayHighlight"></div>
+        <div class="days-score-grid" id="daysScoreGrid"></div>
+    </div>
+
+    <!-- MOON PHASE -->
+    <div class="card" id="moonCard">
+        <div class="card-header"><span>🌙</span><h3>Moon Phase</h3></div>
+        <div class="moon-card-inner">
+            <div class="moon-emoji" id="moonEmoji">🌑</div>
+            <div class="moon-info">
+                <h2 id="moonName">Calculating…</h2>
+                <p id="moonDesc"></p>
+                <div class="moon-stats">
+                    <div class="moon-stat"><span>Illumination</span><strong id="moonIllum">—</strong></div>
+                    <div class="moon-stat"><span>Moon Age</span><strong id="moonAge">—</strong></div>
+                    <div class="moon-stat"><span>Next Full Moon</span><strong id="nextFull">—</strong></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CLOTHING SUGGESTION -->
+    <div class="card" id="clothingCard" style="display:none;">
+        <div class="card-header"><span>👕</span><h3>What to Wear Today</h3></div>
+        <div class="outfit-display" id="outfitDisplay"></div>
+    </div>
+
+    <!-- PRESSURE TREND -->
+    <div class="card" id="pressureCard" style="display:none;">
+        <div class="card-header"><span>🔵</span><h3>Atmospheric Pressure Trend</h3></div>
+        <div class="pressure-hero" id="pressureHero"></div>
+        <div class="chart-container"><canvas id="pressureChart"></canvas></div>
+    </div>
+
+    <!-- PRECIPITATION CHART -->
+    <div class="card" id="rainCard" style="display:none;">
+        <div class="card-header"><span>🌧️</span><h3>Weekly Precipitation Forecast</h3></div>
+        <div class="rain-chart-container"><canvas id="rainChart"></canvas></div>
+    </div>
+
+    {% else %}
+    <div class="card" style="text-align:center;padding:40px;">
+        <p style="color:#fbbf24;font-weight:600;">Location not available.</p>
+    </div>
+    {% endif %}
+
+    <button onclick="window.history.back()" class="btn-back">← Back to Results</button>
+</div>
+<button id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+const LAT = '{{ lat }}';
+const LON = '{{ lon }}';
+
+// ── Moon Phase calculation
+function getMoonPhase(date) {
+    const known = new Date(2000, 0, 6);
+    const diff = (date - known) / (1000 * 60 * 60 * 24);
+    const cycle = 29.53058867;
+    let age = ((diff % cycle) + cycle) % cycle;
+    const illum = Math.round((1 - Math.cos((age / cycle) * 2 * Math.PI)) / 2 * 100);
+    let name, emoji, desc;
+    if      (age < 1.85)  { name = 'New Moon';        emoji = '🌑'; desc = 'The Moon is invisible tonight as it passes between Earth and Sun.'; }
+    else if (age < 7.38)  { name = 'Waxing Crescent'; emoji = '🌒'; desc = 'A sliver of the Moon is visible in the evening sky, growing nightly.'; }
+    else if (age < 9.22)  { name = 'First Quarter';   emoji = '🌓'; desc = 'Half the Moon is illuminated — a great time for nighttime photography.'; }
+    else if (age < 14.76) { name = 'Waxing Gibbous';  emoji = '🌔'; desc = 'More than half the Moon gleams brightly in the evening sky.'; }
+    else if (age < 16.61) { name = 'Full Moon';        emoji = '🌕'; desc = 'The Moon is fully illuminated. Expect higher tides and vivid moonlight.'; }
+    else if (age < 22.15) { name = 'Waning Gibbous';  emoji = '🌖'; desc = 'The Moon is gradually fading after reaching its peak illumination.'; }
+    else if (age < 23.99) { name = 'Last Quarter';    emoji = '🌗'; desc = 'Half the Moon is visible in the early morning hours.'; }
+    else if (age < 29.53) { name = 'Waning Crescent'; emoji = '🌘'; desc = 'A thin crescent hangs in the pre-dawn sky before the next New Moon.'; }
+    else                   { name = 'New Moon';        emoji = '🌑'; desc = 'The cycle begins anew.'; }
+
+    const daysToFull = age < 14.76 ? (14.76 - age) : (cycle - age + 14.76);
+    const nextFull = new Date(Date.now() + daysToFull * 86400000);
+    return { name, emoji, desc, illum, age: age.toFixed(1), nextFull: nextFull.toLocaleDateString('en-US', {month:'short', day:'numeric'}) };
+}
+
+// ── Clothing suggestion
+function getOutfit(feelsLike, condition) {
+    if (condition.includes('Rain') || condition.includes('Drizzle') || condition.includes('Shower')) {
+        return { icon: '☂️', title: 'Rain Gear', desc: 'Bring a waterproof umbrella or raincoat. Wear water-resistant shoes.', tags: ['Raincoat', 'Umbrella', 'Waterproof boots', 'Quick-dry clothes'] };
+    }
+    if (feelsLike >= 35)  return { icon: '🩳', title: 'Very Hot Weather', desc: 'Wear minimal, loose-fitting clothes. Light colours reflect sunlight.', tags: ['Shorts', 'Tank top', 'Sunglasses', 'Sunhat', 'SPF 50+'] };
+    if (feelsLike >= 28)  return { icon: '👕', title: 'Warm & Sunny', desc: 'A light t-shirt is perfect. Keep sunglasses and water handy.', tags: ['T-shirt', 'Light trousers', 'Sunglasses', 'Water bottle'] };
+    if (feelsLike >= 20)  return { icon: '👔', title: 'Mild and Pleasant', desc: 'A light layer over a tee is ideal for this comfortable weather.', tags: ['Light jacket', 'Jeans/chinos', 'Sneakers'] };
+    if (feelsLike >= 12)  return { icon: '🧥', title: 'Cool — Layer Up', desc: 'Add a mid-layer like a sweater or fleece jacket to stay comfortable.', tags: ['Jacket', 'Sweater', 'Jeans', 'Closed shoes'] };
+    if (feelsLike >= 5)   return { icon: '🧣', title: 'Cold — Bundle Up', desc: 'Dress in warm layers. A scarf and gloves will feel great.', tags: ['Winter coat', 'Sweater', 'Scarf', 'Gloves', 'Boots'] };
+    return                       { icon: '🧤', title: 'Very Cold — Stay Warm', desc: 'Wear heavy winter clothing and minimize time outdoors.', tags: ['Heavy coat', 'Thermal layers', 'Gloves', 'Scarf', 'Warm boots'] };
+}
+
+// ── WMO labels
+const WX = {
+    0:'Clear Sky',1:'Mostly Clear',2:'Partly Cloudy',3:'Overcast',45:'Foggy',48:'Icy Fog',
+    51:'Light Drizzle',53:'Drizzle',55:'Heavy Drizzle',61:'Light Rain',63:'Moderate Rain',65:'Heavy Rain',
+    71:'Light Snow',73:'Snow',75:'Heavy Snow',80:'Rain Showers',81:'Thundershowers',82:'Violent Showers',
+    95:'Thunderstorm',96:'Thunderstorm + Hail',99:'Severe Thunderstorm'
+};
+const WXI = {0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',51:'🌦️',61:'🌧️',80:'🌧️',95:'🌩️',96:'⛈️'};
+function wxi(c){ return WXI[c]||'🌤️'; }
+function wxl(c){ return WX[c]||'Unknown'; }
+
+// ── Outdoor score
+function calcScore(rain, uv, wind, maxT) {
+    let s = 100;
+    s -= rain * 0.6;
+    if (uv > 8) s -= 20; else if (uv > 5) s -= 10;
+    if (wind > 40) s -= 25; else if (wind > 25) s -= 10;
+    if (maxT > 38) s -= 20; else if (maxT > 34) s -= 10;
+    return Math.max(0, Math.min(100, Math.round(s)));
+}
+
+// ── Weekly summary text
+function buildSummary(daily) {
+    const wxCodes = daily.weathercode.slice(0,7).map(c => wxl(c));
+    const maxTemps = daily.temperature_2m_max.slice(0,7);
+    const rains = daily.precipitation_probability_max.slice(0,7);
+    const rainyDays = rains.filter(r => r > 50).length;
+    const avgMax = Math.round(maxTemps.reduce((a,b) => a+b, 0) / maxTemps.length);
+    const peakTemp = Math.round(Math.max(...maxTemps));
+    const peakDay = ['Today','Mon','Tue','Wed','Thu','Fri','Sat'][maxTemps.indexOf(Math.max(...maxTemps))];
+
+    let text = `This week will see an <strong>average high of ${avgMax}°C</strong>. `;
+    if (rainyDays === 0) text += 'Expect <strong>mostly dry and clear conditions</strong> throughout the week — great for outdoor plans. ';
+    else if (rainyDays <= 2) text += `There will be <strong>${rainyDays} rainy day${rainyDays>1?'s':''}</strong> — carry an umbrella on those days. `;
+    else text += `<strong>Frequent rain</strong> is expected this week with ${rainyDays} wet days — plan accordingly. `;
+    text += `Temperatures will peak at <strong>${peakTemp}°C on ${peakDay}</strong>. `;
+    if (daily.uv_index_max.some(u => u >= 8)) text += '⚠️ <strong>High UV levels</strong> on some days — use sun protection.';
+    return text;
+}
+
+// ── Main fetch
+if (LAT && LON && LAT !== 'None') {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}`
+        + `&hourly=temperature_2m,apparent_temperature,surface_pressure,weathercode`
+        + `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,windspeed_10m_max,precipitation_sum`
+        + `&timezone=auto`;
+
+    fetch(url).then(r => r.json()).then(data => {
+        const h = data.hourly;
+        const d = data.daily;
+        const now = new Date().getHours();
+
+        // ── Moon phase
+        const moon = getMoonPhase(new Date());
+        document.getElementById('moonEmoji').textContent = moon.emoji;
+        document.getElementById('moonName').textContent = moon.name;
+        document.getElementById('moonDesc').textContent = moon.desc;
+        document.getElementById('moonIllum').textContent = moon.illum + '%';
+        document.getElementById('moonAge').textContent = moon.age + ' days';
+        document.getElementById('nextFull').textContent = moon.nextFull;
+        document.getElementById('moonCard').style.display = 'block';
+
+        // ── Clothing
+        const outfit = getOutfit(h.apparent_temperature[now], wxl(h.weathercode[now]));
+        document.getElementById('outfitDisplay').innerHTML = `
+            <div class="outfit-icon">${outfit.icon}</div>
+            <div class="outfit-info">
+                <h2>${outfit.title}</h2>
+                <p>${outfit.desc}</p>
+                <div class="outfit-tags">${outfit.tags.map(t => `<span class="outfit-tag">${t}</span>`).join('')}</div>
+            </div>
+        `;
+        document.getElementById('clothingCard').style.display = 'block';
+
+        // ── Best Day
+        const scores = d.time.slice(0,7).map((t, i) => ({
+            day: i === 0 ? 'Today' : i === 1 ? 'Tmrw' : new Date(t).toLocaleDateString('en-US',{weekday:'short'}),
+            score: calcScore(d.precipitation_probability_max[i], d.uv_index_max[i], d.windspeed_10m_max[i], d.temperature_2m_max[i]),
+            icon: wxi(d.weathercode[i]),
+            label: wxl(d.weathercode[i]),
+            max: Math.round(d.temperature_2m_max[i]),
+        }));
+        const best = scores.reduce((a, b) => a.score > b.score ? a : b);
+        const bestIdx = scores.indexOf(best);
+        document.getElementById('bestDayHighlight').innerHTML = `
+            <div class="best-day-highlight">
+                <div class="best-day-badge">${best.icon}</div>
+                <div class="best-day-info">
+                    <h2>${best.day} — ${best.label}</h2>
+                    <p>With an outdoor score of <strong>${best.score}/100</strong>. High of ${best.max}°C, low rain chance and comfortable conditions make this the best day to be outside this week.</p>
+                    <span class="best-day-tag">🏆 Best Day for Outdoors</span>
+                </div>
+            </div>
+        `;
+        const grid = document.getElementById('daysScoreGrid');
+        scores.forEach((s, i) => {
+            grid.insertAdjacentHTML('beforeend', `
+                <div class="day-score-item${i === bestIdx ? ' best' : ''}">
+                    <div class="day-score-name">${s.day}</div>
+                    <div class="day-score-icon">${s.icon}</div>
+                    <div class="day-score-bar-track"><div class="day-score-bar-fill" style="width:${s.score}%"></div></div>
+                    <div class="day-score-val">${s.score}</div>
+                </div>
+            `);
+        });
+        document.getElementById('bestDayCard').style.display = 'block';
+
+        // ── Weekly Summary
+        document.getElementById('summaryText').innerHTML = buildSummary(d);
+        document.getElementById('summaryCard').style.display = 'block';
+
+        // ── Pressure Trend
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Outfit', sans-serif";
+        const pNow = Math.round(h.surface_pressure[now]);
+        const pPrev = Math.round(h.surface_pressure[Math.max(0, now - 3)]);
+        const diff = pNow - pPrev;
+        const trendClass = diff > 1 ? 'trend-rising' : diff < -1 ? 'trend-falling' : 'trend-stable';
+        const trendLabel = diff > 1 ? '↑ Rising — Clearing Up' : diff < -1 ? '↓ Falling — Weather Worsening' : '→ Stable Conditions';
+        document.getElementById('pressureHero').innerHTML = `
+            <div class="pressure-value">${pNow}<small> hPa</small></div>
+            <div class="pressure-trend-badge ${trendClass}">${trendLabel}</div>
+        `;
+        const pLabels = h.time.slice(now - 11, now + 13).map(t => new Date(t).toLocaleTimeString([], {hour:'numeric', hour12:true}));
+        const pVals   = h.surface_pressure.slice(now - 11, now + 13).map(v => Math.round(v));
+        new Chart(document.getElementById('pressureChart'), {
+            type: 'line',
+            data: {
+                labels: pLabels,
+                datasets: [{
+                    label: 'Pressure (hPa)', data: pVals,
+                    borderColor: '#818cf8', borderWidth: 2.5, tension: 0.4, fill: true,
+                    backgroundColor: 'rgba(129,140,248,.12)',
+                    pointBackgroundColor: '#818cf8', pointBorderColor: '#fff', pointHoverRadius: 8, pointRadius: 3
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(10,10,20,.9)', cornerRadius: 10, padding: 10 } },
+                scales: { y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { callback: v => v + ' hPa' } }, x: { grid: { display: false } } }
+            }
+        });
+        document.getElementById('pressureCard').style.display = 'block';
+
+        // ── Precipitation Bar Chart
+        const rainLabels = d.time.slice(0,7).map((t, i) => i === 0 ? 'Today' : new Date(t).toLocaleDateString('en-US',{weekday:'short'}));
+        const rainMM = d.precipitation_sum.slice(0,7).map(v => v || 0);
+        new Chart(document.getElementById('rainChart'), {
+            type: 'bar',
+            data: {
+                labels: rainLabels,
+                datasets: [{
+                    label: 'Expected Rain (mm)', data: rainMM,
+                    backgroundColor: rainMM.map(v => v > 5 ? 'rgba(56,189,248,.7)' : 'rgba(99,102,241,.5)'),
+                    borderColor: rainMM.map(v => v > 5 ? '#38bdf8' : '#6366f1'),
+                    borderWidth: 1.5, borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(10,10,20,.9)', cornerRadius: 10, padding: 10, callbacks: { label: c => ` ${c.raw} mm` } } },
+                scales: { y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { callback: v => v + 'mm' } }, x: { grid: { display: false } } }
+            }
+        });
+        document.getElementById('rainCard').style.display = 'block';
+
+    }).catch(e => console.error('Insights error:', e));
+}
+
+window.addEventListener('scroll', () => {
+    document.getElementById('scrollTop').classList.toggle('visible', window.scrollY > 300);
+});
+</script>
+</body>
+</html>
